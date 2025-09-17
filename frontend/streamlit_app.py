@@ -1,85 +1,68 @@
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 import streamlit as st
 import json
-from io import StringIO
-from docx import Document
-import fitz  # PyMuPDF for PDFs
-
+import os
+import tempfile
 from app.classifier import batch_classify
 from app.risk import score_risk
-from app.render import render_markdown
+from app.render import render_markdown, render_pdf
+from docx import Document
 
-st.title("🤖 Silent Meeting Observer")
+st.set_page_config(page_title="Silent Meeting Observer", layout="wide")
 
-uploaded = st.file_uploader("Upload transcript file", type=["json", "txt", "docx", "pdf"])
+st.title("📝 Silent Meeting Observer")
+st.write("Upload a transcript file (JSON, TXT, DOCX, PDF) to generate a smart meeting summary.")
 
-if uploaded:
-    # -------------------------------
-    # Handle JSON transcripts
-    # -------------------------------
-    if uploaded.name.endswith(".json"):
-        data = json.load(uploaded)
+uploaded_file = st.file_uploader(
+    "Upload transcript file",
+    type=["json", "txt", "docx", "pdf"]
+)
 
-    # -------------------------------
-    # Handle TXT transcripts
-    # Format: "Speaker: message"
-    # -------------------------------
-    elif uploaded.name.endswith(".txt"):
-        stringio = StringIO(uploaded.getvalue().decode("utf-8"))
-        lines = stringio.readlines()
-        utterances = []
-        for line in lines:
-            if ":" in line:
-                speaker, text = line.split(":", 1)
-                utterances.append({"speaker": speaker.strip(), "text": text.strip()})
-        data = {
-            "title": "Uploaded TXT Meeting",
-            "attendees": list({u["speaker"] for u in utterances}),
-            "utterances": utterances,
-        }
+if uploaded_file:
+    file_ext = os.path.splitext(uploaded_file.name)[-1].lower()
 
-    # -------------------------------
-    # Handle DOCX transcripts
-    # Format: "Speaker: message"
-    # -------------------------------
-    elif uploaded.name.endswith(".docx"):
-        doc = Document(uploaded)
-        utterances = []
-        for para in doc.paragraphs:
-            if ":" in para.text:
-                speaker, text = para.text.split(":", 1)
-                utterances.append({"speaker": speaker.strip(), "text": text.strip()})
-        data = {
-            "title": "Uploaded Word Meeting",
-            "attendees": list({u["speaker"] for u in utterances}),
-            "utterances": utterances,
-        }
+    # === 1. Parse the uploaded file ===
+    if file_ext == ".json":
+        data = json.load(uploaded_file)
 
-    # -------------------------------
-    # Handle PDF transcripts
-    # Format: "Speaker: message"
-    # -------------------------------
-    elif uploaded.name.endswith(".pdf"):
-        pdf = fitz.open(stream=uploaded.read(), filetype="pdf")
-        utterances = []
-        for page in pdf:
-            text = page.get_text().splitlines()
-            for line in text:
-                if ":" in line:
-                    speaker, msg = line.split(":", 1)
-                    utterances.append({"speaker": speaker.strip(), "text": msg.strip()})
-        data = {
-            "title": "Uploaded PDF Meeting",
-            "attendees": list({u["speaker"] for u in utterances}),
-            "utterances": utterances,
-        }
+    elif file_ext == ".txt":
+        text = uploaded_file.read().decode("utf-8")
+        data = {"utterances": text.split("\n")}
 
-    # -------------------------------
-    # Process transcript
-    # -------------------------------
-    st.subheader("Smart Summary")
+    elif file_ext == ".docx":
+        doc = Document(uploaded_file)
+        text = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+        data = {"utterances": text.split("\n")}
+
+    elif file_ext == ".pdf":
+        import PyPDF2
+        reader = PyPDF2.PdfReader(uploaded_file)
+        text = "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
+        data = {"utterances": text.split("\n")}
+
+    else:
+        st.error("Unsupported file type.")
+        st.stop()
+
+    # === 2. Classify transcript ===
     results = batch_classify(data["utterances"])
-    scored = [score_risk(r) for r in results]
+
+    # === 3. Score risks while keeping structure ===
+    scored = {}
+    for section, items in results.items():
+        if section == "Risks":
+            scored[section] = [score_risk(item) for item in items]
+        else:
+            scored[section] = items
+
+    # === 4. Render to screen ===
+    st.subheader("Smart Summary")
     st.markdown(render_markdown(data, scored))
+
+    # === 5. Download full report as PDF ===
+    pdf_buffer = render_pdf(data, scored)
+    st.download_button(
+        label="📥 Download Full Summary (PDF)",
+        data=pdf_buffer,
+        file_name="meeting_summary.pdf",
+        mime="application/pdf"
+    )
