@@ -13,6 +13,10 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from app.classifier import batch_classify
 from app.risk import score_risk
 from app.render import render_markdown, render_pdf
+from frontend.app.classifier import batch_classify
+from frontend.app.risk import score_risk
+from frontend.app.render import render_markdown, render_pdf
+
 
 
 
