@@ -1,11 +1,10 @@
+# app/classifier.py
+
 def batch_classify(utterances):
     """
-    Classify meeting transcript lines into categories:
-    - Action Items
-    - Risks
-    - Follow-ups
-    - Next Meeting
-    - Additional Notes
+    Rule-based classifier for meeting transcript utterances.
+    Groups into Action Items, Risks, Follow-ups, Next Meeting, Notes.
+    Always returns dicts with type + text.
     """
 
     results = {
@@ -17,7 +16,7 @@ def batch_classify(utterances):
     }
 
     for u in utterances:
-        # if it's a dict, get the 'text' field
+        # Handle dict or string
         if isinstance(u, dict):
             text = u.get("text", "").strip()
         else:
@@ -26,41 +25,26 @@ def batch_classify(utterances):
         if not text:
             continue
 
-        low = text.lower()
+        lower = text.lower()
 
         # --- Action Items ---
-        if any(kw in low for kw in [
-            "will do", "need to", "i'll", "assign", "take care", "owner",
-            "action item", "task", "responsible for", "to do", "due"
-        ]):
-            results["Action Items"].append(text)
-            continue
+        if any(kw in lower for kw in ["will do", "i'll", "we need to", "action item", "assign", "owner"]):
+            results["Action Items"].append({"type": "Action Item", "text": text})
 
         # --- Risks ---
-        if any(kw in low for kw in [
-            "risk", "delay", "issue", "problem", "blocker", "concern",
-            "dependency", "slip", "slippage"
-        ]):
-            results["Risks"].append(text)
-            continue
+        elif any(kw in lower for kw in ["risk", "delay", "blocker", "issue", "problem", "concern"]):
+            results["Risks"].append({"type": "Risk", "text": text})
 
         # --- Follow-ups ---
-        if any(kw in low for kw in [
-            "follow up", "circle back", "check again", "remind",
-            "update later", "pending confirmation"
-        ]):
-            results["Follow-ups"].append(text)
-            continue
+        elif any(kw in lower for kw in ["follow up", "circle back", "check later", "remind", "pending"]):
+            results["Follow-ups"].append({"type": "Follow-up", "text": text})
 
         # --- Next Meeting ---
-        if any(kw in low for kw in [
-            "next meeting", "schedule", "catch up", "next week",
-            "discuss further", "plan for next"
-        ]):
-            results["Next Meeting"].append(text)
-            continue
+        elif any(kw in lower for kw in ["next meeting", "schedule", "let's meet", "catch up", "plan for next"]):
+            results["Next Meeting"].append({"type": "Next Meeting", "text": text})
 
         # --- Additional Notes ---
-        results["Additional Notes"].append(text)
+        else:
+            results["Additional Notes"].append({"type": "Note", "text": text})
 
     return results
