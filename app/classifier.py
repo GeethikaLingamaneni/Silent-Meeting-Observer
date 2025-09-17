@@ -3,8 +3,7 @@
 def batch_classify(utterances):
     """
     Rule-based classifier for meeting transcript utterances.
-    Groups into Action Items, Risks, Follow-ups, Next Meeting, Notes.
-    Always returns dicts with type + text.
+    Splits into Action Items, Risks, Follow-ups, Next Meeting, Additional Notes.
     """
 
     results = {
@@ -16,7 +15,6 @@ def batch_classify(utterances):
     }
 
     for u in utterances:
-        # Handle dict or string
         if isinstance(u, dict):
             text = u.get("text", "").strip()
         else:

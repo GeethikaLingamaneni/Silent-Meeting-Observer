@@ -1,42 +1,21 @@
 # app/render.py
-
 import io
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
-import pandas as pd
 
-def ensure_dataframe(data):
-    if isinstance(data, pd.DataFrame):
-        return data
-    elif isinstance(data, list):
-        return pd.DataFrame(data)
-    elif isinstance(data, dict):
-        return pd.DataFrame([data])
-    else:
-        return pd.DataFrame()
+def render_markdown(data, scored):
+    """Renders meeting summary into Markdown sections"""
 
-def ensure_dict(scored):
-    if isinstance(scored, dict):
-        return scored
-    elif isinstance(scored, list):
-        return {"Risks": scored}
-    else:
-        return {}
+    md = "# Meeting Summary\n\n"
 
-def render_markdown(data, scored=None):
-    data = ensure_dataframe(data)
-    scored = ensure_dict(scored)
-
-    md = "## Meeting Summary\n\n"
-
-    # --- Action Items
+    # --- Action Items ---
     if scored.get("Action Items"):
-        md += "### 📝 Action Items\n"
+        md += "### 📝 Action Items (Owner – Task – Timeline)\n"
         for item in scored["Action Items"]:
             md += f"- {item['text']}\n"
         md += "\n"
 
-    # --- Risks
+    # --- Risks ---
     if scored.get("Risks"):
         md += "### ⚠️ Risks\n"
         for r in scored["Risks"]:
@@ -45,100 +24,65 @@ def render_markdown(data, scored=None):
             md += f"- {r['text']} _(Severity: {sev}, Score: {score})_\n"
         md += "\n"
 
-    # --- Follow-ups
-    md += "### 🔄 Follow-ups\n"
+    # --- Follow-ups ---
     if scored.get("Follow-ups"):
+        md += "### 🔄 Follow-ups\n"
         for f in scored["Follow-ups"]:
             md += f"- {f['text']}\n"
+        md += "\n"
     else:
-        md += "_No follow-ups_\n"
-    md += "\n"
+        md += "### 🔄 Follow-ups\n_No follow-ups_\n\n"
 
-    # --- Next Meeting
-    md += "### 📅 Next Meeting\n"
+    # --- Next Meeting ---
     if scored.get("Next Meeting"):
+        md += "### 📅 Next Meeting\n"
         for nm in scored["Next Meeting"]:
             md += f"- {nm['text']}\n"
-    else:
-        md += "_Not scheduled_\n"
-    md += "\n"
-
-    # --- Additional Notes
-    if scored.get("Additional Notes"):
-        md += "### 🗒 Additional Notes\n"
-        for note in scored["Additional Notes"]:
-            md += f"- {note['text']}\n"
         md += "\n"
+    else:
+        md += "### 📅 Next Meeting\n_Not scheduled_\n\n"
 
-    # --- Brief Summary
+    # --- Brief Summary ---
+    num_actions = len(scored.get("Action Items", []))
+    num_risks = len(scored.get("Risks", []))
+    num_followups = len(scored.get("Follow-ups", []))
+    num_next = len(scored.get("Next Meeting", []))
+    num_notes = len(scored.get("Additional Notes", []))
+
     md += "### 📝 Brief Summary\n"
-    md += f"- Action Items: {len(scored.get('Action Items', []))}\n"
-    md += f"- Risks: {len(scored.get('Risks', []))}\n"
-    md += f"- Follow-ups: {len(scored.get('Follow-ups', []))}\n"
-    md += f"- Next Meeting: {len(scored.get('Next Meeting', []))}\n"
-    md += f"- Notes: {len(scored.get('Additional Notes', []))}\n"
+    md += f"- Action Items: {num_actions}\n"
+    md += f"- Risks: {num_risks}\n"
+    md += f"- Follow-ups: {num_followups}\n"
+    md += f"- Next Meeting: {num_next}\n"
+    md += f"- Notes: {num_notes}\n"
 
     return md
 
-def render_pdf(data, scored=None):
-    data = ensure_dataframe(data)
-    scored = ensure_dict(scored)
+
+def render_pdf(data, scored):
+    """Renders meeting summary into a downloadable PDF"""
 
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
-    text = c.beginText(40, height - 40)
-    text.setFont("Helvetica", 10)
 
-    text.textLine("Meeting Summary")
-    text.textLine("")
+    y = height - 50
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(50, y, "Meeting Summary")
+    y -= 30
 
-    if scored.get("Action Items"):
-        text.textLine("Action Items:")
-        for item in scored["Action Items"]:
-            text.textLine(f"- {item['text']}")
-        text.textLine("")
+    sections = render_markdown(data, scored).split("\n")
+    c.setFont("Helvetica", 10)
 
-    if scored.get("Risks"):
-        text.textLine("Risks:")
-        for r in scored["Risks"]:
-            sev = r.get("severity", "N/A")
-            score = r.get("score", 0)
-            text.textLine(f"- {r['text']} (Severity: {sev}, Score: {score})")
-        text.textLine("")
+    for line in sections:
+        if y < 50:  # new page
+            c.showPage()
+            y = height - 50
+            c.setFont("Helvetica", 10)
 
-    text.textLine("Follow-ups:")
-    if scored.get("Follow-ups"):
-        for f in scored["Follow-ups"]:
-            text.textLine(f"- {f['text']}")
-    else:
-        text.textLine("No follow-ups")
-    text.textLine("")
+        c.drawString(50, y, line)
+        y -= 15
 
-    text.textLine("Next Meeting:")
-    if scored.get("Next Meeting"):
-        for nm in scored["Next Meeting"]:
-            text.textLine(f"- {nm['text']}")
-    else:
-        text.textLine("Not scheduled")
-    text.textLine("")
-
-    if scored.get("Additional Notes"):
-        text.textLine("Additional Notes:")
-        for note in scored["Additional Notes"]:
-            text.textLine(f"- {note['text']}")
-        text.textLine("")
-
-    # Brief Summary
-    text.textLine("Brief Summary:")
-    text.textLine(f"- Action Items: {len(scored.get('Action Items', []))}")
-    text.textLine(f"- Risks: {len(scored.get('Risks', []))}")
-    text.textLine(f"- Follow-ups: {len(scored.get('Follow-ups', []))}")
-    text.textLine(f"- Next Meeting: {len(scored.get('Next Meeting', []))}")
-    text.textLine(f"- Notes: {len(scored.get('Additional Notes', []))}")
-
-    c.drawText(text)
-    c.showPage()
     c.save()
     buffer.seek(0)
     return buffer
