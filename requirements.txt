@@ -2,3 +2,5 @@ streamlit
 pydantic>=2.0
 python-dateutil
 dateparser
+python-docx
+PyMuPDF
