@@ -1,0 +1,9 @@
+{
+  "title": "Q4 Launch Sync",
+  "attendees": ["Priya", "Carlos", "Aisha"],
+  "utterances": [
+    { "ts": "00:08:12", "speaker": "Priya", "text": "We will ship v1 without gift cards and add them in v1.1." },
+    { "ts": "00:12:31", "speaker": "Carlos", "text": "I will handle promo code validation by next Friday if the API spec is ready." },
+    { "ts": "00:15:02", "speaker": "Aisha", "text": "Carlos already has five high-priority tickets. We might slip if the spec is late." }
+  ]
+}
