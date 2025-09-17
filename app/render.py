@@ -34,15 +34,8 @@ def render_markdown(meeting, items):
             for a in actions
         ])
         st.table(df)
-
-        # CSV download for Action Items
-        csv = df.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="⬇️ Download Action Items (CSV)",
-            data=csv,
-            file_name="action_items.csv",
-            mime="text/csv"
-        )
+        for row in df.itertuples(index=False):
+            md += f"- {row.Owner}: {row._2} (Timeline: {row.Timeline})\n"
     else:
         md += "_No action items recorded_\n"
     md += "\n"
@@ -76,19 +69,10 @@ def render_markdown(meeting, items):
         md += "_Next meeting not scheduled_\n"
     md += "\n"
 
-    # --- Full Summary Downloads ---
-    # TXT
-    st.download_button(
-        label="⬇️ Download Full Summary (TXT)",
-        data=md,
-        file_name="meeting_summary.txt",
-        mime="text/plain"
-    )
-
-    # PDF
+    # === Single PDF Download ===
     pdf_buffer = create_pdf(md)
     st.download_button(
-        label="⬇️ Download Full Summary (PDF)",
+        label="⬇️ Download Full Meeting Summary (PDF)",
         data=pdf_buffer,
         file_name="meeting_summary.pdf",
         mime="application/pdf"
