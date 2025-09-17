@@ -1,6 +1,24 @@
-streamlit
-pydantic>=2.0
-python-dateutil
-dateparser
-python-docx
-PyMuPDF
+# === Core Framework ===
+streamlit>=1.25.0
+
+# === File Parsing ===
+python-docx        # For Word (.docx) transcripts
+PyMuPDF            # For PDF transcripts
+beautifulsoup4     # For HTML transcripts
+
+# === Data Handling & Tables ===
+pandas             # For action item tracker tables
+
+# === Export & Downloads ===
+reportlab          # For generating PDF downloads
+
+# === JSON & Validation ===
+jsonschema         # For safe JSON parsing
+
+# === Notebook Support ===
+jupyter            # To run notebooks locally
+notebook           # For Colab / Jupyter compatibility
+ipykernel          # To run notebooks in VSCode/Jupyter
+
+# === Utilities (safe to include) ===
+numpy              # Common dependency for pandas & PyMuPDF
