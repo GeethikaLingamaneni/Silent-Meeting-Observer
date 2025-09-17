@@ -1,58 +1,31 @@
-import pandas as pd
 import streamlit as st
-from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+import io
 
+def render_markdown(data, scored=None):
+    md = "## Meeting Summary\n\n"
 
-def create_pdf(text: str):
-    """Convert plain text into a simple PDF in memory."""
-    buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=letter)
-    textobject = c.beginText(40, 750)
-    for line in text.split("\n"):
-        textobject.textLine(line)
-    c.drawText(textobject)
-    c.save()
-    buffer.seek(0)
-    return buffer
+    # --- 1. Action Items
+    if "Action Item" in data.columns:
+        md += "### 📝 Action Items (Owner – Task – Timeline)\n"
+        for _, row in data.iterrows():
+            owner = row.get("Owner", "Unknown")
+            task = row.get("Action Item", "No task")
+            timeline = row.get("Timeline", "TBD")
+            md += f"- **{owner}**: {task} _(Timeline: {timeline})_\n"
+        md += "\n"
 
+    # --- 2. Risks
+    if scored and "Risks" in scored:
+        md += "### ⚠️ Risks\n"
+        for r in scored["Risks"]:
+            md += f"- {r}\n"
+        md += "\n"
 
-def render_markdown(meeting, items):
-    md = f"# Meeting Summary: {meeting.get('title', 'Untitled Meeting')}\n\n"
-
-    # === 1. Action Items (Owner – Task – Timeline) ===
-    actions = [i for i in items if i["type"] == "Action"]
-    md += "## 📝 Action Items (Owner – Task – Timeline)\n"
-    if actions:
-        df = pd.DataFrame([
-            {
-                "Owner": a.get("speaker", "Unknown"),
-                "Action Item": a["text"],
-                "Timeline": a.get("due", "TBD"),
-            }
-            for a in actions
-        ])
-        st.table(df)
-        for row in df.itertuples(index=False):
-            md += f"- {row.Owner}: {row._2} (Timeline: {row.Timeline})\n"
-    else:
-        md += "_No action items recorded_\n"
-    md += "\n"
-
-    # === 2. Risks ===
-    risks = [i for i in items if i["type"] == "Risk"]
-    md += "## ⚠️ Risks\n"
-    if risks:
-        for r in risks:
-            md += f"- {r['text']} *(Severity: {r.get('severity','Low')})*\n"
-    else:
-        md += "_No risks identified_\n"
-    md += "\n"
-
-    # === 3. Follow-ups ===
-    followups = meeting.get("followups", [])
-    md += "## 🔄 Follow-ups\n"
+    # --- 3. Follow-ups
+    followups = scored.get("Follow-ups", []) if scored else []
+    md += "### 🔄 Follow-ups\n"
     if followups:
         for f in followups:
             md += f"- {f}\n"
@@ -60,22 +33,34 @@ def render_markdown(meeting, items):
         md += "_No follow-ups from previous meetings_\n"
     md += "\n"
 
-    # === 4. Next Meeting ===
-    next_meeting = meeting.get("next_meeting", None)
-    md += "## 📅 Next Meeting\n"
+    # --- 4. Next Meeting
+    next_meeting = scored.get("Next Meeting") if scored else None
+    md += "### 📅 Next Meeting\n"
     if next_meeting:
-        md += f"- Scheduled: {next_meeting}\n"
+        md += f"- {next_meeting}\n"
     else:
         md += "_Next meeting not scheduled_\n"
     md += "\n"
 
-    # === Single PDF Download ===
-    pdf_buffer = create_pdf(md)
-    st.download_button(
-        label="⬇️ Download Full Meeting Summary (PDF)",
-        data=pdf_buffer,
-        file_name="meeting_summary.pdf",
-        mime="application/pdf"
-    )
+    # --- 5. Brief Summary (at the bottom)
+    num_actions = len(data) if "Action Item" in data.columns else 0
+    num_risks = len(scored["Risks"]) if scored and "Risks" in scored else 0
+    has_followups = bool(followups)
+    has_next_meeting = bool(next_meeting)
+
+    md += "### 📝 Brief Summary\n"
+    md += f"- **Action Items**: {num_actions}\n"
+    md += f"- **Risks**: {num_risks}\n"
+    md += f"- **Follow-ups**: {'Yes' if has_followups else 'No'}\n"
+    md += f"- **Next Meeting**: {'Scheduled' if has_next_meeting else 'Not scheduled'}\n\n"
 
     return md
+
+def render_pdf(data, scored=None):
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+    text = c.beginText(40, height - 40)
+    text.setFont("Helvetica", 10)
+
+    tex
