@@ -15,8 +15,19 @@ def ensure_dataframe(data):
     else:
         return pd.DataFrame()
 
+def ensure_dict(scored):
+    """Always return a dictionary for scored input."""
+    if isinstance(scored, dict):
+        return scored
+    elif isinstance(scored, list):
+        return {"Risks": scored}   # treat list as risks
+    else:
+        return {}
+
 def render_markdown(data, scored=None):
-    data = ensure_dataframe(data)  # ✅ make sure it's a DataFrame
+    data = ensure_dataframe(data)
+    scored = ensure_dict(scored)   # ✅ normalize here
+
     md = "## Meeting Summary\n\n"
 
     # --- 1. Action Items
@@ -30,14 +41,15 @@ def render_markdown(data, scored=None):
         md += "\n"
 
     # --- 2. Risks
-    if scored and "Risks" in scored:
+    risks = scored.get("Risks", [])
+    if risks:
         md += "### ⚠️ Risks\n"
-        for r in scored["Risks"]:
+        for r in risks:
             md += f"- {r}\n"
         md += "\n"
 
     # --- 3. Follow-ups
-    followups = scored.get("Follow-ups", []) if scored else []
+    followups = scored.get("Follow-ups", [])
     md += "### 🔄 Follow-ups\n"
     if followups:
         for f in followups:
@@ -47,7 +59,7 @@ def render_markdown(data, scored=None):
     md += "\n"
 
     # --- 4. Next Meeting
-    next_meeting = scored.get("Next Meeting") if scored else None
+    next_meeting = scored.get("Next Meeting")
     md += "### 📅 Next Meeting\n"
     if next_meeting:
         md += f"- {next_meeting}\n"
@@ -55,9 +67,9 @@ def render_markdown(data, scored=None):
         md += "_Next meeting not scheduled_\n"
     md += "\n"
 
-    # --- 5. Brief Summary (at the bottom)
+    # --- 5. Brief Summary
     num_actions = len(data) if not data.empty else 0
-    num_risks = len(scored["Risks"]) if scored and "Risks" in scored else 0
+    num_risks = len(risks)
     has_followups = bool(followups)
     has_next_meeting = bool(next_meeting)
 
@@ -70,7 +82,9 @@ def render_markdown(data, scored=None):
     return md
 
 def render_pdf(data, scored=None):
-    data = ensure_dataframe(data)  # ✅ make sure it's a DataFrame
+    data = ensure_dataframe(data)
+    scored = ensure_dict(scored)   # ✅ normalize here too
+
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
@@ -89,13 +103,14 @@ def render_pdf(data, scored=None):
             text.textLine(f"- {owner}: {task} (Timeline: {timeline})")
         text.textLine("")
 
-    if scored and "Risks" in scored:
+    risks = scored.get("Risks", [])
+    if risks:
         text.textLine("Risks:")
-        for r in scored["Risks"]:
+        for r in risks:
             text.textLine(f"- {r}")
         text.textLine("")
 
-    followups = scored.get("Follow-ups", []) if scored else []
+    followups = scored.get("Follow-ups", [])
     text.textLine("Follow-ups:")
     if followups:
         for f in followups:
@@ -104,7 +119,7 @@ def render_pdf(data, scored=None):
         text.textLine("No follow-ups from previous meetings")
     text.textLine("")
 
-    next_meeting = scored.get("Next Meeting") if scored else None
+    next_meeting = scored.get("Next Meeting")
     text.textLine("Next Meeting:")
     if next_meeting:
         text.textLine(f"- {next_meeting}")
@@ -114,7 +129,7 @@ def render_pdf(data, scored=None):
 
     # Brief Summary
     num_actions = len(data) if not data.empty else 0
-    num_risks = len(scored["Risks"]) if scored and "Risks" in scored else 0
+    num_risks = len(risks)
     has_followups = bool(followups)
     has_next_meeting = bool(next_meeting)
 
