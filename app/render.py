@@ -1,5 +1,20 @@
 import pandas as pd
 import streamlit as st
+from io import BytesIO
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+
+def create_pdf(text):
+    """Convert plain text into a simple PDF in memory."""
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    textobject = c.beginText(40, 750)
+    for line in text.split("\n"):
+        textobject.textLine(line)
+    c.drawText(textobject)
+    c.save()
+    buffer.seek(0)
+    return buffer
 
 def render_markdown(meeting, items):
     md = f"# Meeting Summary: {meeting.get('title', 'Untitled Meeting')}\n\n"
@@ -17,6 +32,15 @@ def render_markdown(meeting, items):
             for a in actions
         ])
         st.table(df)
+
+        # CSV download for Action Items
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="⬇️ Download Action Items (CSV)",
+            data=csv,
+            file_name="action_items.csv",
+            mime="text/csv"
+        )
     else:
         md += "_No action items recorded_\n"
     md += "\n"
@@ -49,5 +73,23 @@ def render_markdown(meeting, items):
     else:
         md += "_Next meeting not scheduled_\n"
     md += "\n"
+
+    # --- Full Summary Downloads ---
+    # TXT
+    st.download_button(
+        label="⬇️ Download Full Summary (TXT)",
+        data=md,
+        file_name="meeting_summary.txt",
+        mime="text/plain"
+    )
+
+    # PDF
+    pdf_buffer = create_pdf(md)
+    st.download_button(
+        label="⬇️ Download Full Summary (PDF)",
+        data=pdf_buffer,
+        file_name="meeting_summary.pdf",
+        mime="application/pdf"
+    )
 
     return md
