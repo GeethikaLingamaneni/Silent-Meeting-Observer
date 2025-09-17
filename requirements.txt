@@ -22,3 +22,5 @@ ipykernel          # To run notebooks in VSCode/Jupyter
 
 # === Utilities (safe to include) ===
 numpy              # Common dependency for pandas & PyMuPDF
+
+dateparser

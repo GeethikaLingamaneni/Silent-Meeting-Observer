@@ -4,7 +4,8 @@ from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
-def create_pdf(text):
+
+def create_pdf(text: str):
     """Convert plain text into a simple PDF in memory."""
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
@@ -15,6 +16,7 @@ def create_pdf(text):
     c.save()
     buffer.seek(0)
     return buffer
+
 
 def render_markdown(meeting, items):
     md = f"# Meeting Summary: {meeting.get('title', 'Untitled Meeting')}\n\n"
