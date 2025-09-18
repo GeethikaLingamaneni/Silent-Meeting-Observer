@@ -1,82 +1,85 @@
 import streamlit as st
 import json
 import os
-import tempfile
-from app.classifier import batch_classify
-from app.risk import score_risk
-from app.render import render_markdown, render_pdf
-from docx import Document
-from app.classifier import batch_classify
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import sys
+import pandas as pd
 
+# 🔧 Fix imports so app/ modules can be found
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.classifier import batch_classify
 from app.risk import score_risk
 from app.render import render_markdown, render_pdf
-from frontend.app.classifier import batch_classify
-from frontend.app.risk import score_risk
-from frontend.app.render import render_markdown, render_pdf
-
-
 
 
 st.set_page_config(page_title="Silent Meeting Observer", layout="wide")
-
 st.title("📝 Silent Meeting Observer")
-st.write("Upload a transcript file (JSON, TXT, DOCX, PDF) to generate a smart meeting summary.")
 
+# === File upload ===
 uploaded_file = st.file_uploader(
     "Upload transcript file",
-    type=["json", "txt", "docx", "pdf"]
+    type=["json", "txt", "docx", "pdf"],
 )
 
 if uploaded_file:
-    file_ext = os.path.splitext(uploaded_file.name)[-1].lower()
+    filename = uploaded_file.name
 
-    # === 1. Parse the uploaded file ===
-    if file_ext == ".json":
+    # --- Parse input file ---
+    if filename.endswith(".json"):
         data = json.load(uploaded_file)
 
-    elif file_ext == ".txt":
+    elif filename.endswith(".txt"):
         text = uploaded_file.read().decode("utf-8")
-        data = {"utterances": text.split("\n")}
+        data = {"utterances": text.splitlines()}
 
-    elif file_ext == ".docx":
+    elif filename.endswith(".docx"):
+        from docx import Document
         doc = Document(uploaded_file)
-        text = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
-        data = {"utterances": text.split("\n")}
+        text = [p.text for p in doc.paragraphs if p.text.strip()]
+        data = {"utterances": text}
 
-    elif file_ext == ".pdf":
-        import PyPDF2
-        reader = PyPDF2.PdfReader(uploaded_file)
-        text = "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
-        data = {"utterances": text.split("\n")}
+    elif filename.endswith(".pdf"):
+        from PyPDF2 import PdfReader
+        reader = PdfReader(uploaded_file)
+        text = [p.extract_text() for p in reader.pages if p.extract_text()]
+        data = {"utterances": text}
 
     else:
-        st.error("Unsupported file type.")
+        st.error("Unsupported file format")
         st.stop()
 
-    # === 2. Classify transcript ===
-    results = batch_classify(data["utterances"])
+    st.success(f"Loaded file: {filename}")
 
-    # === 3. Score risks while keeping structure ===
-    scored = {}
-    for section, items in results.items():
-        if section == "Risks":
-            scored[section] = [score_risk(item) for item in items]
-        else:
-            scored[section] = items
+    # --- Classification ---
+    if "utterances" in data:
+        results = batch_classify(data["utterances"])
+        scored = [score_risk(r) for r in results]
+    else:
+        st.error("Transcript format invalid — no 'utterances' found.")
+        st.stop()
 
-    # === 4. Render to screen ===
+    # --- Smart Summary (Table) ---
     st.subheader("Smart Summary")
+
+    action_items = [
+        {"Owner": r.get("owner", "TBD"), "Action Item": r.get("text", ""), "Timeline": r.get("timeline", "TBD")}
+        for r in scored if r.get("type") == "Action Item"
+    ]
+
+    if action_items:
+        df = pd.DataFrame(action_items)
+        st.table(df)
+    else:
+        st.info("No action items found.")
+
+    # --- Full Meeting Summary ---
+    st.markdown("## Meeting Summary")
     st.markdown(render_markdown(data, scored))
 
-    # === 5. Download full report as PDF ===
-    pdf_buffer = render_pdf(data, scored)
+    # --- One Download Button (PDF only) ---
     st.download_button(
-        label="📥 Download Full Summary (PDF)",
-        data=pdf_buffer,
+        label="⬇️ Download Full Summary (PDF)",
+        data=render_pdf(data, scored),
         file_name="meeting_summary.pdf",
-        mime="application/pdf"
+        mime="application/pdf",
     )
