@@ -1,128 +1,93 @@
-# frontend/streamlit_app.py
 import streamlit as st
-import json
-import os
-import sys
-import pandas as pd
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, AudioProcessorBase
+import av
 import tempfile
-
-# Ensure Python can find app/ package
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import os
+from docx import Document
+import pdfplumber
+import json
 
 from app.classifier import batch_classify
 from app.risk import score_risk
 from app.render import render_markdown, render_pdf
 
-# Extra: speech + mic
-import whisper
-from streamlit_webrtc import webrtc_streamer, WebRtcMode
-import av
-
-# Load Whisper model once
-model = whisper.load_model("base")
 
 st.set_page_config(page_title="Silent Meeting Observer", layout="wide")
 st.title("📝 Silent Meeting Observer")
 
 mode = st.radio("Choose Mode:", ["Upload Transcript", "Live Mic Capture"])
 
-# ---------------- File Upload Mode ----------------
+
+# ==============================
+# File Upload Mode
+# ==============================
 if mode == "Upload Transcript":
-    uploaded_file = st.file_uploader("Upload transcript file", type=["json", "txt", "docx", "pdf"])
+    uploaded = st.file_uploader("Upload transcript file", type=["docx", "pdf", "txt", "json"])
+    if uploaded:
+        st.success(f"Loaded file: {uploaded.name}")
 
-    if uploaded_file:
-        filename = uploaded_file.name
+        text = ""
+        if uploaded.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            doc = Document(uploaded)
+            text = "\n".join([p.text for p in doc.paragraphs])
+        elif uploaded.type == "application/pdf":
+            with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                tmp.write(uploaded.read())
+                tmp_path = tmp.name
+            with pdfplumber.open(tmp_path) as pdf:
+                text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
+            os.remove(tmp_path)
+        elif uploaded.type == "text/plain":
+            text = uploaded.read().decode("utf-8")
+        elif uploaded.type == "application/json":
+            data = json.load(uploaded)
+            text = " ".join(data.get("utterances", []))
 
-        if filename.endswith(".json"):
-            data = json.load(uploaded_file)
-        elif filename.endswith(".txt"):
-            text = uploaded_file.read().decode("utf-8")
-            data = {"utterances": text.splitlines()}
-        elif filename.endswith(".docx"):
-            from docx import Document
-            doc = Document(uploaded_file)
-            text = [p.text for p in doc.paragraphs if p.text.strip()]
-            data = {"utterances": text}
-        elif filename.endswith(".pdf"):
-            from PyPDF2 import PdfReader
-            reader = PdfReader(uploaded_file)
-            text = [p.extract_text() for p in reader.pages if p.extract_text()]
-            data = {"utterances": text}
-        else:
-            st.error("Unsupported file format")
-            st.stop()
+        if text.strip():
+            # Process transcript
+            results = batch_classify(text.split("\n"))
+            scored = [score_risk(r) for r in results]
 
-        st.success(f"Loaded file: {filename}")
+            # Show MOM
+            st.subheader("Smart Summary")
+            st.markdown(render_markdown({"utterances": text.split("\n")}, scored))
 
-        results = batch_classify(data["utterances"])
-        scored = [score_risk(r) for r in results]
+            # Download PDF
+            pdf_bytes = render_pdf({"utterances": text.split("\n")}, scored)
+            st.download_button("⬇️ Download Meeting Summary (PDF)", pdf_bytes, file_name="meeting_summary.pdf")
 
-        # Smart Summary table (simplified)
-        st.subheader("Smart Summary")
-        action_items = [
-            {
-                "Owner": r.get("owner", "TBD"),
-                "Task": r.get("text", ""),
-                "Timeline": r.get("timeline", "TBD")
-            }
-            for r in scored if r.get("type") == "Action Item"
-        ]
 
-        if action_items:
-            st.table(pd.DataFrame(action_items))
-        else:
-            st.info("No action items found.")
-
-        st.markdown(render_markdown(data, scored))
-
-        st.download_button(
-            label="📥 Download Full Summary (PDF)",
-            data=render_pdf(data, scored),
-            file_name="meeting_summary.pdf",
-            mime="application/pdf",
-        )
-
-# ---------------- Live Mic Capture Mode ----------------
+# ==============================
+# Live Mic Capture Mode
+# ==============================
 elif mode == "Live Mic Capture":
     st.info("🎤 Speak or let your meeting play through your microphone. Transcription happens live.")
 
-    transcript_holder = st.empty()
-    live_transcript = []
+    class AudioProcessor(AudioProcessorBase):
+        def __init__(self):
+            self.chunks = []
 
-    def audio_frame_callback(frame: av.AudioFrame):
-        pcm = frame.to_ndarray().flatten().astype("float32")
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
-            tmpfile.write(pcm.tobytes())
-            tmpfile.flush()
-            try:
-                result = model.transcribe(tmpfile.name)
-                if result and "text" in result and result["text"].strip():
-                    live_transcript.append(result["text"])
-                    transcript_holder.text("\n".join(live_transcript[-10:]))
-            except Exception:
-                pass
-        return frame
+        def recv_audio(self, frame: av.AudioFrame) -> av.AudioFrame:
+            # Here you could add speech-to-text integration
+            # For now, we just collect raw audio
+            self.chunks.append(frame.to_ndarray())
+            return frame
 
     webrtc_streamer(
         key="meeting-listener",
         mode=WebRtcMode.RECVONLY,
-        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+        rtc_configuration={
+            "iceServers": [
+                {"urls": ["stun:stun.l.google.com:19302"]},
+                {
+                    "urls": ["turn:openrelay.metered.ca:80", "turn:openrelay.metered.ca:443"],
+                    "username": "openrelayproject",
+                    "credential": "openrelayproject",
+                },
+            ]
+        },
         media_stream_constraints={"audio": True, "video": False},
-        audio_frame_callback=audio_frame_callback,
+        audio_processor_factory=AudioProcessor,
     )
 
-    if st.button("Generate MoM from Transcript"):
-        if not live_transcript:
-            st.warning("No transcript captured yet.")
-        else:
-            data = {"utterances": live_transcript}
-            results = batch_classify(data["utterances"])
-            scored = [score_risk(r) for r in results]
-
-            st.markdown(render_markdown(data, scored))
-            st.download_button(
-                label="📥 Download Full Summary (PDF)",
-                data=render_pdf(data, scored),
-                file_name="meeting_summary.pdf",
-                mime="application/pdf",
-            )
+    st.warning("⚠️ Note: Live transcription requires connecting to STUN/TURN servers. Upload mode is more stable for Streamlit Cloud.")
