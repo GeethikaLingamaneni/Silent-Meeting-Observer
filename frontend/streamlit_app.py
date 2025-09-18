@@ -3,6 +3,15 @@ import json
 import os
 import sys
 import pandas as pd
+import sys, os
+
+# Add project root (where app/ lives) to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from app.classifier import batch_classify
+from app.risk import score_risk
+from app.render import render_markdown
+
 
 # 🔧 Fix imports so app/ modules can be found
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
