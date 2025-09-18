@@ -1,29 +1,6 @@
-# Core app dependencies
 streamlit==1.38.0
-streamlit-webrtc==0.47.7
-
-# Document parsing
-python-docx==1.0.1
-pdfplumber==0.11.4
-PyPDF2==3.0.1
-
-# Data handling
 pandas==2.2.2
 numpy==1.26.4
-
-# Date & time parsing
+python-docx==1.0.1
+pdfplumber==0.11.4
 dateparser==1.2.0
-
-# Text processing
-regex==2024.5.15
-
-# Risk/Classification helpers (optional NLP libs)
-scikit-learn==1.5.1
-
-# Audio processing (for live mic mode)
-sounddevice==0.4.7
-pydub==0.25.1
-
-# For safe text extraction + rendering
-markdown-it-py==3.0.0
-mdurl==0.1.2
