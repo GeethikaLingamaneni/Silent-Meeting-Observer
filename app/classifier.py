@@ -1,54 +1,67 @@
-def render_markdown(data, scored):
-    """
-    Render a meeting summary in markdown format with
-    Action Items, Risks, Follow-ups, and Notes.
-    """
+"""
+classifier.py
+Classifies each line (utterance) from a meeting transcript into:
+- Action Item
+- Risk
+- Follow-up
+- Note
+"""
 
-    md = "## Meeting Summary\n\n"
+def classify_utterance(utterance: str) -> dict:
+    """
+    Classify a single utterance into Action Item, Risk, Follow-up, or Note.
+    """
+    if not isinstance(utterance, str):
+        return {"type": "Note", "text": ""}
+
+    u = utterance.strip().lower()
 
     # --- Action Items ---
-    action_items = [s for s in scored if s.get("type") == "Action Item"]
-    md += "### 📝 Action Items (Owner – Task – Timeline)\n"
-    if action_items:
-        for a in action_items:
-            owner = a.get("owner", "TBD")
-            task = a.get("text", "")
-            timeline = a.get("timeline", "TBD")
-            md += f"- **{owner}** → {task} _(Timeline: {timeline})_\n"
-    else:
-        md += "_No action items found._\n"
-    md += "\n"
+    if any(keyword in u for keyword in [
+        "will do", "i can", "assign", "take care", "task", "action item", "owner"
+    ]):
+        return {
+            "type": "Action Item",
+            "text": utterance,
+            "owner": "TBD",         # later: NLP can detect real names
+            "timeline": "TBD"
+        }
 
     # --- Risks ---
-    risks = [s for s in scored if s.get("type") == "Risk"]
-    md += "### ⚠️ Risks\n"
-    if risks:
-        for r in risks:
-            text = r.get("text", "")
-            severity = r.get("severity", "Low")
-            md += f"- {text} _(Severity: {severity})_\n"
-    else:
-        md += "_No risks identified._\n"
-    md += "\n"
+    elif any(keyword in u for keyword in [
+        "risk", "issue", "delay", "blocker", "problem", "concern"
+    ]):
+        return {
+            "type": "Risk",
+            "text": utterance,
+            "severity": "Medium"    # default, will be re-scored in risk.py
+        }
 
     # --- Follow-ups ---
-    followups = [s for s in scored if s.get("type") == "Follow-up"]
-    md += "### 🔄 Follow-ups\n"
-    if followups:
-        for f in followups:
-            md += f"- {f.get('text', '')}\n"
-    else:
-        md += "_No follow-ups._\n"
-    md += "\n"
+    elif any(keyword in u for keyword in [
+        "follow up", "check back", "circle back", "update later", "pending"
+    ]):
+        return {
+            "type": "Follow-up",
+            "text": utterance
+        }
 
-    # --- Notes ---
-    notes = [s for s in scored if s.get("type") == "Note"]
-    md += "### 🗒️ Notes\n"
-    if notes:
-        for n in notes:
-            md += f"- {n.get('text', '')}\n"
+    # --- Notes (default) ---
     else:
-        md += "_No additional notes._\n"
-    md += "\n"
+        return {
+            "type": "Note",
+            "text": utterance
+        }
 
-    return md
+
+def batch_classify(utterances: list) -> list:
+    """
+    Classify a list of utterances and return structured results.
+    """
+    results = []
+    for u in utterances:
+        if not isinstance(u, str):
+            continue
+        classified = classify_utterance(u)
+        results.append(classified)
+    return results
