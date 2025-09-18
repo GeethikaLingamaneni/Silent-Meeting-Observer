@@ -8,7 +8,8 @@ from app.render import render_markdown, render_pdf
 from docx import Document
 from app.classifier import batch_classify
 import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 
 from app.classifier import batch_classify
 from app.risk import score_risk
