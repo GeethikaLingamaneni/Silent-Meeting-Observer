@@ -1,48 +1,54 @@
-# app/classifier.py
-
-def batch_classify(utterances):
+def render_markdown(data, scored):
     """
-    Rule-based classifier for meeting transcript utterances.
-    Splits into Action Items, Risks, Follow-ups, Next Meeting, Additional Notes.
+    Render a meeting summary in markdown format with
+    Action Items, Risks, Follow-ups, and Notes.
     """
 
-    results = {
-        "Action Items": [],
-        "Risks": [],
-        "Follow-ups": [],
-        "Next Meeting": [],
-        "Additional Notes": []
-    }
+    md = "## Meeting Summary\n\n"
 
-    for u in utterances:
-        if isinstance(u, dict):
-            text = u.get("text", "").strip()
-        else:
-            text = str(u).strip()
+    # --- Action Items ---
+    action_items = [s for s in scored if s.get("type") == "Action Item"]
+    md += "### 📝 Action Items (Owner – Task – Timeline)\n"
+    if action_items:
+        for a in action_items:
+            owner = a.get("owner", "TBD")
+            task = a.get("text", "")
+            timeline = a.get("timeline", "TBD")
+            md += f"- **{owner}** → {task} _(Timeline: {timeline})_\n"
+    else:
+        md += "_No action items found._\n"
+    md += "\n"
 
-        if not text:
-            continue
+    # --- Risks ---
+    risks = [s for s in scored if s.get("type") == "Risk"]
+    md += "### ⚠️ Risks\n"
+    if risks:
+        for r in risks:
+            text = r.get("text", "")
+            severity = r.get("severity", "Low")
+            md += f"- {text} _(Severity: {severity})_\n"
+    else:
+        md += "_No risks identified._\n"
+    md += "\n"
 
-        lower = text.lower()
+    # --- Follow-ups ---
+    followups = [s for s in scored if s.get("type") == "Follow-up"]
+    md += "### 🔄 Follow-ups\n"
+    if followups:
+        for f in followups:
+            md += f"- {f.get('text', '')}\n"
+    else:
+        md += "_No follow-ups._\n"
+    md += "\n"
 
-        # --- Action Items ---
-        if any(kw in lower for kw in ["will do", "i'll", "we need to", "action item", "assign", "owner"]):
-            results["Action Items"].append({"type": "Action Item", "text": text})
+    # --- Notes ---
+    notes = [s for s in scored if s.get("type") == "Note"]
+    md += "### 🗒️ Notes\n"
+    if notes:
+        for n in notes:
+            md += f"- {n.get('text', '')}\n"
+    else:
+        md += "_No additional notes._\n"
+    md += "\n"
 
-        # --- Risks ---
-        elif any(kw in lower for kw in ["risk", "delay", "blocker", "issue", "problem", "concern"]):
-            results["Risks"].append({"type": "Risk", "text": text})
-
-        # --- Follow-ups ---
-        elif any(kw in lower for kw in ["follow up", "circle back", "check later", "remind", "pending"]):
-            results["Follow-ups"].append({"type": "Follow-up", "text": text})
-
-        # --- Next Meeting ---
-        elif any(kw in lower for kw in ["next meeting", "schedule", "let's meet", "catch up", "plan for next"]):
-            results["Next Meeting"].append({"type": "Next Meeting", "text": text})
-
-        # --- Additional Notes ---
-        else:
-            results["Additional Notes"].append({"type": "Note", "text": text})
-
-    return results
+    return md
